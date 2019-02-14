@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Program.cs~RFadd9cc.TMP" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Pfim" Version="0.5.2" />
     <PackageReference Include="SixLabors.ImageSharp" Version="1.0.0-beta0005" />
     <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="1.0.0-beta0005" />

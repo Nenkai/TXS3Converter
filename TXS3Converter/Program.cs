@@ -67,7 +67,7 @@ namespace TXS3Converter
                 }
             }
 
-            Console.WriteLine($"Done, {processedFiles} were converted. (Press any key to exit)");
+            Console.WriteLine($"Done, {processedFiles} files were converted. (Press any key to exit)");
             Console.ReadKey();
 
         }
