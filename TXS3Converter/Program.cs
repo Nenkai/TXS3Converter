@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Linq;
 using System.IO;
+using System.Text;
 
-namespace TXS3Converter
+using GTTools.Formats;
+
+namespace GTTools
 {
     class Program
     {
@@ -12,10 +15,10 @@ namespace TXS3Converter
 
         static void Main(string[] args)
         {
-            Console.WriteLine("TXS3 Converter for Gran Turismo 5/6");
+            Console.WriteLine("Gran Turismo TXS3 Converter");
             if (args.Length < 1)
             {
-                Console.WriteLine("Usage: TXS3 <input_files>");
+                Console.WriteLine("    Usage: <input_files>");
             }
             else
             {
@@ -37,31 +40,29 @@ namespace TXS3Converter
                             currentFileName = Path.GetFileName(f);
                             try
                             {
-                                TXS3.FromFile(f).SaveAsPng(Path.ChangeExtension(f, ".png"));
-                                Console.WriteLine($@"Converted {currentFileName} to png.");
+                                ProcessFile(f, args);
                                 processedFiles++;
                             }
                             catch (Exception e)
                             {
                                 Console.WriteLine($@"[!] Could not convert {currentFileName} : {e.Message}");
-                                continue;
                             }
                         }
                     }
                     else
                     {
-                        if (args.Length > 1) isBatchConvert = true;
+                        if (args.Length > 1) 
+                            isBatchConvert = true;
+
                         currentFileName = Path.GetFileName(arg);
                         try
                         {
-                            TXS3.FromFile(arg).SaveAsPng(Path.ChangeExtension(arg, ".png"));
-                            Console.WriteLine($@"Converted {currentFileName} to png.");
+                            ProcessFile(arg, args);
                             processedFiles++;
                         }
                         catch (Exception e)
                         {
                             Console.WriteLine($@"[!] Could not convert {currentFileName} : {e.Message}");
-                            continue;
                         }
                     }
                 }
@@ -69,7 +70,81 @@ namespace TXS3Converter
 
             Console.WriteLine($"Done, {processedFiles} files were converted. (Press any key to exit)");
             Console.ReadKey();
+        }
 
+        static bool _texConvExists = false;
+        static void ProcessFile(string path, string[] args)
+        {
+            currentFileName = Path.GetFileName(path);
+            
+            string magic = GetFileMagic(path);
+            switch (magic)
+            {
+                case "TXS3":
+                    ProcessTXS3Texture(path);
+                    break;
+                case "MDL3":
+                    ProcessMDL3Model(path);
+                    break;
+                default:
+                    if (!_texConvExists && !File.Exists("texconv.exe"))
+                    {
+                        Console.WriteLine("TexConv (image to DDS tool) is missing. Download it from https://github.com/microsoft/DirectXTex/releases");
+                        Environment.Exit(0);
+                    }
+                    _texConvExists = true;
+
+                    TXS3.ImageFormat format = 0;
+                    if (args.Contains("--DXT1"))
+                        format = TXS3.ImageFormat.DXT1;
+                    else if (args.Contains("--DXT3"))
+                        format = TXS3.ImageFormat.DXT3;
+                    else if (args.Contains("--DXT5"))
+                        format = TXS3.ImageFormat.DXT5;
+                    else if (args.Contains("--DXT10"))
+                        format = TXS3.ImageFormat.DXT10;
+                    else
+                    {
+                        Console.WriteLine("If you tried to convert an image to TXS, provide the corresponding image format argument at the end. (--DXT1/DXT3/DXT5/DXT10)");
+                        Environment.Exit(0);
+                    }
+
+                    if (!TXS3.ToTXS3File(path, format))
+                    {
+                        Console.WriteLine("Converted {path} to TXS3");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Could not process {path}.");
+                    }
+                    return;
+            }
+        }
+
+        static void ProcessTXS3Texture(string path)
+        {
+            var tex = TXS3.ParseFromFile(path);
+            Console.WriteLine($"DDS Image format: {tex.Format}");
+
+            string dir = Path.GetDirectoryName(path);
+            string finalFileName = Path.GetFileName(path) + ".png";
+
+            tex.SaveAsPng(Path.Combine(dir, finalFileName));
+            Console.WriteLine($"Converted {currentFileName} to png.");
+        }
+
+        static void ProcessMDL3Model(string path)
+        {
+            MDL3.FromFile(path);
+        }
+
+        static string GetFileMagic(string path)
+        {
+            using var fs = new FileStream(path, FileMode.Open);
+
+            Span<byte> mBuf = stackalloc byte[4];
+            fs.Read(mBuf);
+            return Encoding.ASCII.GetString(mBuf);
         }
     }
 }
