@@ -210,7 +210,10 @@ namespace GTTools.Formats
             else if (imgFormat == ImageFormat.DXT10)
                 arguments += " -f R8G8B8A8_UNORM -dx10";
 
-            arguments += " -y -m 1 -nologo";
+            arguments += " -y"      // Overwrite if it exists
+                      + " -m 1"     // Don't care about extra mipmaps
+                      + " -nologo"  // No copyright logo
+                      + " -srgb";   // Auto correct gamma
 
             Process converter = Process.Start("texconv.exe", arguments);
             converter.WaitForExit();
