@@ -109,14 +109,10 @@ namespace GTTools
                         Environment.Exit(0);
                     }
 
-                    if (!TXS3.ToTXS3File(path, format))
-                    {
-                        Console.WriteLine("Converted {path} to TXS3");
-                    }
+                    if (TXS3.ToTXS3File(path, format))
+                        Console.WriteLine($"Converted {path} to TXS3");
                     else
-                    {
                         Console.WriteLine($"Could not process {path}.");
-                    }
                     return;
             }
         }
