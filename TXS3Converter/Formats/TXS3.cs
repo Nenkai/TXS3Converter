@@ -210,7 +210,7 @@ namespace GTTools.Formats
             else if (imgFormat == ImageFormat.DXT10)
                 arguments += " -f R8G8B8A8_UNORM -dx10";
 
-            arguments += " -y -m 1";
+            arguments += " -y -m 1 -nologo";
 
             Process converter = Process.Start("texconv.exe", arguments);
             converter.WaitForExit();
