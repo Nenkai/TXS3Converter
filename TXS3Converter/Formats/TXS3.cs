@@ -22,10 +22,14 @@ namespace GTTools.Formats
     public class TXS3
     {
         public const string MAGIC = "TXS3";
+
+        public string OriginalFilePath { get; private set; }
         public int Width { get; private set; }
         public int Height { get; private set; }
         public int PitchOrLinearSize;
         public int Mipmap;
+        public uint Stride { get; set; }
+
         public TXS3Flags Flags;
 
         public ImageFormat Format;
@@ -44,14 +48,26 @@ namespace GTTools.Formats
             if (sr.Length < 4 || sr.ReadStringRaw(4) != MAGIC)
                 throw new InvalidDataException("Not a valid TXS3 image file.");
 
-            var size = sr.ReadInt32();
-            if (size != sr.Length)
-                Console.WriteLine($"Warning: Hardcoded file size does not match actual file size ({size} != {sr.Length}). Might break.");
+            var endOffset = sr.ReadInt32(); 
+            if (endOffset > sr.Length)
+                Console.WriteLine($"Warning: Provided file is above bundled size length ({endOffset} > {sr.Length}). Might break.");
+                
 
             var tex = new TXS3();
 
             sr.Position += 4; // Original Position, if bundled
-            sr.Position += 4; // Real File Size
+
+            uint originalFilePathOffset = sr.ReadUInt32();
+            if (originalFilePathOffset != 0 && sr.Length - originalFilePathOffset >= 3)
+            {
+                sr.Position = (int)originalFilePathOffset + 2; // Two empty bytes
+                tex.OriginalFilePath = sr.ReadString1();
+                if (!string.IsNullOrEmpty(tex.OriginalFilePath))
+                    Console.WriteLine($"Original file path found: {tex.OriginalFilePath}");
+                sr.Position = 0x10;
+
+            }
+
             sr.Position += 4; // Nothing
             // ushort unk always 1
             sr.ReadUInt16(); // Image Count, expect 1
@@ -74,6 +90,10 @@ namespace GTTools.Formats
             // ushort flags?
             // Empty until 0x86
             // ushort always 1
+
+            sr.Position = 0x6A;
+            tex.Stride = sr.ReadUInt16();
+
             sr.Position = 0x88;
             var imageSize = sr.ReadInt32();
             sr.Position++; // Always 2?
@@ -169,6 +189,7 @@ namespace GTTools.Formats
             bs.Position += 6;
             bs.WriteBytes(new byte[] { 0x18, 0x40, 0x00, 0x10 });
 
+            // Write Stride, width * bytes per pixel
             if (imageFormat == ImageFormat.DXT1)
                 bs.WriteUInt16((ushort)(dds.Width * 2u));
             else
@@ -317,19 +338,26 @@ namespace GTTools.Formats
                 bw.Write(124);    // dwSize (Struct Size)
                 bw.Write((uint)(DDSHeaderFlags.TEXTURE)); // dwFlags
                 bw.Write(Height); // dwHeight
-                bw.Write(Width);  // dwWidth
+
+                // Dirty fix, some TXS3's in GTHD have 1920 as width, but its actually 2048. Stride is correct, so use it instead.
+                int width;
+                if (Format == ImageFormat.DXT1)
+                    width = (int)Stride / 2;  // dwWidth
+                else
+                    width = (int)Stride / 4;  // dwWidth
+                bw.Write(width);
 
                 switch (Format)   // dwPitchOrLinearSize
                 {
                     case ImageFormat.DXT1:
-                        bw.Write(Height * Width / 2);
+                        bw.Write(Height * width / 2);
                         break;
                     case ImageFormat.DXT3:
                     case ImageFormat.DXT5:
-                        bw.Write(Height * Width);
+                        bw.Write(Height * width);
                         break;
                     default:
-                        bw.Write((Width * 32 + 7) / 8);
+                        bw.Write((width * 32 + 7) / 8);
                         break;
                 }
 
@@ -352,6 +380,7 @@ namespace GTTools.Formats
                         bw.Write(0); // ABitMask
                         break;
                     case ImageFormat.DXT10_MORTON:
+                    case ImageFormat.DXT10:
                         bw.Write((uint)(DDSPixelFormatFlags.DDPF_FOURCC));           // Format Flags
                         bw.Write("DX10".ToCharArray());            // FourCC
                         bw.Write(0);         // RGBBitCount
@@ -377,15 +406,15 @@ namespace GTTools.Formats
                     if (Format == ImageFormat.DXT10_MORTON)
                     {
                         int bytesPerPix = 4;
-                        int byteCount = (Width * Height) * 4;
+                        int byteCount = (width * Height) * 4;
                         byte[] newImageData = new byte[byteCount];
 
                         SpanReader sr = new SpanReader(imageData);
                         SpanWriter sw = new SpanWriter(newImageData);
                         Span<byte> pixBuffer = new byte[4];
-                        for (int i = 0; i < Width * Height; i++)
+                        for (int i = 0; i < width * Height; i++)
                         {
-                            int pixIndex = MortonReorder(i, Width, Height);
+                            int pixIndex = MortonReorder(i, width, Height);
                             pixBuffer = sr.ReadBytes(4);
                             int destIndex = bytesPerPix * pixIndex;
                             sw.Position = destIndex;
