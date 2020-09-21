@@ -5,12 +5,14 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Formats;
 
+using Syroot.BinaryData.Core;
 using Syroot.BinaryData.Memory;
 using Syroot.BinaryData;
 
@@ -22,6 +24,7 @@ namespace GTTools.Formats
     public class TXS3
     {
         public const string MAGIC = "TXS3";
+        public const string MAGIC_LE = "3SXT";
 
         public string OriginalFilePath { get; private set; }
         public int Width { get; private set; }
@@ -43,10 +46,25 @@ namespace GTTools.Formats
             byte[] file = File.ReadAllBytes(path);
 
             // Every format is read as BE.
-            var sr = new SpanReader(file, endian: Syroot.BinaryData.Core.Endian.Big); 
+            var sr = new SpanReader(file);
 
-            if (sr.Length < 4 || sr.ReadStringRaw(4) != MAGIC)
+            string magic = sr.ReadStringRaw(4);
+            if (sr.Length < 4)
+                throw new InvalidDataException("File is too small to be a TXS3 image.");
+
+            /*
+             * magic != MAGIC_LE: false
+             * !magic.Equals(MAGIC_LE, StringComparison.Ordinal): false
+             * magic: "3SXT"
+             * MAGIC_LE: "3SXT"
+             * 
+             * Happens in Release, THE FUCK?
+            */
+
+            if (!magic.Equals(MAGIC) && !magic.Equals(MAGIC_LE))
                 throw new InvalidDataException("Not a valid TXS3 image file.");
+
+            sr.Endian = magic == MAGIC_LE ? Endian.Little : Endian.Big;
 
             var endOffset = sr.ReadInt32(); 
             if (endOffset > sr.Length)
@@ -71,10 +89,11 @@ namespace GTTools.Formats
             sr.Position += 4; // Nothing
             // ushort unk always 1
             sr.ReadUInt16(); // Image Count, expect 1
-            sr.Position += 4; // Some kind of offset, 0x40
-            sr.ReadUInt32(); // Image Offset
+            sr.ReadUInt16(); // Unk, expect 1
+            int imageDataOffset = sr.ReadInt32(); // Offset for the image data
+            sr.ReadUInt32(); // Also an offset
 
-            // 32 empty bytes
+            sr.Position = imageDataOffset;
             // 00 00 1A 00 always
             // 00 00 00 00 00 00 01
             // Byte, image format again
@@ -133,7 +152,7 @@ namespace GTTools.Formats
 
             ToDDS(path, imageFormat);
 
-            string ddsFileName = path[0..^4] + ".dds";
+            string ddsFileName = Path.ChangeExtension(path, ".dds");
             if (!File.Exists(ddsFileName))
             {
                 Console.WriteLine($"Failed to convert {path} to DDS during the image to TXS process.");
@@ -145,7 +164,7 @@ namespace GTTools.Formats
             byte[] data = File.ReadAllBytes(ddsFileName).AsSpan(0x80).ToArray();
             File.Delete(ddsFileName);
 
-            using var ms = new FileStream(path + ".img", FileMode.Create);
+            using var ms = new FileStream(Path.ChangeExtension(path, ".img"), FileMode.Create);
             using var bs = new BinaryStream(ms, ByteConverter.Big);
 
             bs.WriteString(MAGIC, StringCoding.Raw);

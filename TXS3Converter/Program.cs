@@ -68,8 +68,7 @@ namespace GTTools
                 }
             }
 
-            Console.WriteLine($"Done, {processedFiles} files were converted. (Press any key to exit)");
-            Console.ReadKey();
+            Console.WriteLine($"Done, {processedFiles} files were converted.");
         }
 
         static bool _texConvExists = false;
@@ -81,6 +80,7 @@ namespace GTTools
             switch (magic)
             {
                 case "TXS3":
+                case "3SXT":
                     ProcessTXS3Texture(path);
                     break;
                 case "MDL3":
