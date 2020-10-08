@@ -87,9 +87,9 @@ namespace GTTools
                     ProcessMDL3Model(path);
                     break;
                 default:
-                    if (!_texConvExists && !File.Exists("texconv.exe"))
+                    if (!_texConvExists && !File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "texconv.exe")))
                     {
-                        Console.WriteLine("TexConv (image to DDS tool) is missing. Download it from https://github.com/microsoft/DirectXTex/releases");
+                        Console.WriteLine("TexConv (image to DDS tool) is missing. Download it from https://github.com/microsoft/DirectXTex/releases and place it next to the tool.");
                         Environment.Exit(0);
                     }
                     _texConvExists = true;
@@ -122,10 +122,9 @@ namespace GTTools
             var tex = TXS3.ParseFromFile(path);
             Console.WriteLine($"DDS Image format: {tex.Format}");
 
-            string dir = Path.GetDirectoryName(path);
-            string finalFileName = Path.GetFileName(path) + ".png";
+            string finalFileName = Path.ChangeExtension(path, ".png");
 
-            tex.SaveAsPng(Path.Combine(dir, finalFileName));
+            tex.SaveAsPng(finalFileName);
             Console.WriteLine($"Converted {currentFileName} to png.");
         }
 

@@ -255,7 +255,7 @@ namespace GTTools.Formats
                       + " -nologo"  // No copyright logo
                       + " -srgb";   // Auto correct gamma
 
-            Process converter = Process.Start("texconv.exe", arguments);
+            Process converter = Process.Start(Path.Combine(Directory.GetCurrentDirectory(), "texconv.exe"), arguments);
             converter.WaitForExit();
         }
 
