@@ -124,7 +124,7 @@ namespace GTTools
 
         static void ConvertTXS3Texture(string path)
         {
-            if (!_texConvChecked && !File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "texconv.exe")))
+            if (!_texConvChecked && !File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "texconv.exe")))
             {
                 Console.WriteLine("TexConv (image to DDS tool) is missing. Download it from https://github.com/microsoft/DirectXTex/releases and place it next to the tool.");
                 return;
