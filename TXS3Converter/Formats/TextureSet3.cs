@@ -188,7 +188,7 @@ namespace GTTools.Formats
 
         private static void ConvertToDDS(string fileName, TXS3ImageFormat imgFormat)
         {
-            string arguments = fileName;
+            string arguments = $"\"{fileName}\"";
             if (imgFormat == TXS3ImageFormat.DXT1)
                 arguments += " -f DXT1";
             else if (imgFormat == TXS3ImageFormat.DXT3)
