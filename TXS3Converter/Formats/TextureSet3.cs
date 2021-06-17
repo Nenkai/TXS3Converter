@@ -107,6 +107,8 @@ namespace GTTools.Formats
             int imageInfoOffset = txsBasePos + 0x40 + (0x44 * Textures.Count);
             bs.WriteInt32(imageInfoOffset);
 
+            bs.WriteInt32(0x100); // Stub this for now - Image offset?
+
             // Write textures's render params
             bs.Position = txsBasePos + 0x40;
             foreach (var texture in Textures)
@@ -166,8 +168,6 @@ namespace GTTools.Formats
                 bs.WriteUInt16(0);
                 bs.Position += 12; // Pad
             }
-
-            bs.WriteInt32(0x100); // Image offset
 
             // Finish up main header
             bs.Position = 4;
