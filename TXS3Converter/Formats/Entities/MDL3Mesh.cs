@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Text;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+
+using Syroot.BinaryData;
 using Syroot.BinaryData.Memory;
 
 namespace GTTools.Formats.Entities
@@ -34,11 +36,11 @@ namespace GTTools.Formats.Entities
         private uint UnkOffset; // Offset that points to a list of floats
         private uint UnkOffset2;
 
-        public static MDL3Mesh FromStream(ref SpanReader sr)
+        public static MDL3Mesh FromStream(BinaryStream sr)
         {
             var meshInfo = new MDL3Mesh();
-            meshInfo.Flag1 = sr.ReadByte();   //unk flag 1
-            meshInfo.Flag2 = sr.ReadByte();   //unk flag 2
+            meshInfo.Flag1 = sr.Read1Byte();   //unk flag 1
+            meshInfo.Flag2 = sr.Read1Byte();   //unk flag 2
             meshInfo.MeshIndex = sr.ReadUInt16();
             meshInfo.UnkIndex = sr.ReadUInt16(); 
             meshInfo.null1 = sr.ReadUInt16(); 
@@ -48,7 +50,7 @@ namespace GTTools.Formats.Entities
             if (meshInfo.VertexCount > 0)
             {
                 meshInfo.Verts = new Vertex[meshInfo.VertexCount];
-                int curPos = sr.Position;
+                int curPos = (int)sr.Position;
                 sr.Position = (int)meshInfo.VertexOffset;
                 for (int i = 0; i < meshInfo.VertexCount; i++)
                     meshInfo.Verts[i] = MemoryMarshal.Read<Vertex>(sr.ReadBytes(20));
@@ -61,7 +63,7 @@ namespace GTTools.Formats.Entities
             if (meshInfo.FacesDataLength > 0)
             {
                 meshInfo.Faces = new Face[meshInfo.FacesDataLength / 3];
-                int curPos = sr.Position;
+                int curPos = (int)sr.Position;
                 sr.Position = (int)meshInfo.FacesOffset;
                 for (int i = 0; i < meshInfo.FacesDataLength / 3; i++)
                     meshInfo.Faces[i] = MemoryMarshal.Read<Face>(sr.ReadBytes(6));
@@ -70,8 +72,8 @@ namespace GTTools.Formats.Entities
 
             meshInfo.null5 = sr.ReadUInt32(); 
             meshInfo.null6 = sr.ReadUInt32();
-            meshInfo.Flag3 = sr.ReadByte();   //unk flag 3
-            meshInfo.Flag4 = sr.ReadByte();   //unk flag 4
+            meshInfo.Flag3 = sr.Read1Byte();   //unk flag 3
+            meshInfo.Flag4 = sr.Read1Byte();   //unk flag 4
             meshInfo.Unk = sr.ReadUInt16();
             meshInfo.UnkOffset = sr.ReadUInt32();
             meshInfo.UnkOffset2 = sr.ReadUInt32();

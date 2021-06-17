@@ -4,6 +4,7 @@ using System.Text;
 using System.Diagnostics;
 
 using Syroot.BinaryData.Memory;
+using Syroot.BinaryData;
 
 namespace GTTools.Formats.Entities
 {
@@ -15,14 +16,14 @@ namespace GTTools.Formats.Entities
 
         private uint _strOffset;
 
-        public static MDL3MeshInfo FromStream(ref SpanReader sr)
+        public static MDL3MeshInfo FromStream(BinaryStream sr)
         {
             MDL3MeshInfo meshInfo = new MDL3MeshInfo();
             meshInfo._strOffset = sr.ReadUInt32();
 
-            int curPos = sr.Position;
+            int curPos = (int)sr.Position;
             sr.Position = (int)meshInfo._strOffset;
-            meshInfo.MeshParams = sr.ReadString0();
+            meshInfo.MeshParams = sr.ReadString(StringCoding.ZeroTerminated);
             sr.Position = curPos;
 
             meshInfo.MeshIndex = sr.ReadUInt32();

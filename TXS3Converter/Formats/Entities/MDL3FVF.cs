@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 
 using Syroot.BinaryData.Memory;
+using Syroot.BinaryData;
 
 namespace GTTools.Formats.Entities
 {
@@ -13,7 +14,7 @@ namespace GTTools.Formats.Entities
     public class MDL3FVF
     {
         public byte[] data;
-        public static MDL3FVF FromStream(ref SpanReader sr)
+        public static MDL3FVF FromStream(BinaryStream sr)
         {
             MDL3FVF fvf = new MDL3FVF();
 

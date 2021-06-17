@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Text;
 
 using System.IO;
+
+using Syroot.BinaryData;
 using Syroot.BinaryData.Memory;
 
 using GTTools.Formats.Entities;
@@ -16,7 +18,7 @@ namespace GTTools.Formats
 
         public Dictionary<uint, MDL3Mesh> Meshes { get; private set; } = new Dictionary<uint, MDL3Mesh>();
 
-        public List<TXS3> Textures { get; set; } 
+        public TextureSet3 TextureSet { get; set; } 
 
         //Extract MDL3 Standard and (HIGHLOD vertices only)
         public static MDL3 FromFile(string path)
@@ -24,12 +26,12 @@ namespace GTTools.Formats
             if (!File.Exists(path))
                 throw new FileNotFoundException("File does not exist");
 
-            byte[] file = File.ReadAllBytes(path);
+            using var file = File.Open(path, FileMode.Open);
 
             // Every format is read as BE.
-            var sr = new SpanReader(file, endian: Syroot.BinaryData.Core.Endian.Big);
+            var sr = new BinaryStream(file, ByteConverter.Big);
 
-            if (sr.Length < 4 || sr.ReadStringRaw(4) != MAGIC)
+            if (sr.Length < 4 || sr.ReadString(4) != MAGIC)
                 throw new InvalidDataException("Not a valid MDL3 image file.");
 
             var size = sr.ReadInt32();
@@ -58,25 +60,28 @@ namespace GTTools.Formats
 
             sr.Position = (int)txsOffset;
 
-            mdl.Textures = TXS3.FromStream(ref sr);
+
+            mdl.TextureSet = new TextureSet3();
+            mdl.TextureSet.FromStream(sr);
+
             int j = 0;
-            foreach (var text in mdl.Textures)
+            foreach (var texSet in mdl.TextureSet.Textures)
             {
-                text.SaveAsPng($"{j}.png");
+                texSet.SaveAsPng(Path.GetDirectoryName(path));
                 j++;
             }
 
             sr.Position = (int)meshInfoTableAddress;
             for (int i = 0; i < meshCount; i++)
             {
-                MDL3Mesh mesh = MDL3Mesh.FromStream(ref sr);
+                MDL3Mesh mesh = MDL3Mesh.FromStream(sr);
                 mdl.Meshes.Add(mesh.MeshIndex, mesh);
             }
 
             sr.Position = (int)unkOffset;
             for (int i = 0; i < meshInfoCount; i++)
             {
-                MDL3MeshInfo meshInfo = MDL3MeshInfo.FromStream(ref sr);
+                MDL3MeshInfo meshInfo = MDL3MeshInfo.FromStream(sr);
                 mdl.MeshInfo.Add(meshInfo.MeshIndex, meshInfo);
             }
 
@@ -84,8 +89,8 @@ namespace GTTools.Formats
             MDL3FVF[] vertexInfo = new MDL3FVF[fvfTableCount];
             sr.Position = (int)fvfTableAddress;
             for (int i = 0; i < fvfTableCount; i++)
-                vertexInfo[i] = MDL3FVF.FromStream(ref sr);
-
+                vertexInfo[i] = MDL3FVF.FromStream(sr);
+            
             return null;
         }
     }
