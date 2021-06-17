@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System.Buffers.Binary;
 
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
@@ -57,6 +58,19 @@ namespace GTTools.Formats
             texture.InitFromDDSImage(dds);
 
             byte[] ddsData = File.ReadAllBytes(ddsFileName).AsSpan(0x80).ToArray();
+
+            // Do endian swap for 32bpp type
+            if (txs3Format == TXS3ImageFormat.DXT10 || txs3Format == TXS3ImageFormat.DXT10_MORTON)
+            {
+                SpanReader sr = new SpanReader(ddsData);
+                SpanWriter sw = new SpanWriter(ddsData);
+                for (int j = 0; j < texture.Width * texture.Height; j++)
+                {
+                    int pixel = sr.ReadInt32();
+                    sw.WriteInt32(BinaryPrimitives.ReverseEndianness(pixel));
+                }
+            }
+
             texture.SetDDSData(ddsData);
             File.Delete(ddsFileName);
 
@@ -133,7 +147,7 @@ namespace GTTools.Formats
                 bs.Position = txsBasePos + imageInfoOffset + (0x20 * i);
                 bs.WriteInt32(imageOffset);
                 bs.WriteInt32(endImageOffset - imageOffset);
-                bs.WriteByte(2);
+                bs.WriteByte(0);
 
                 if (Textures[i].Format == TXS3ImageFormat.DXT1)
                     bs.WriteByte(0xA6);
@@ -152,6 +166,8 @@ namespace GTTools.Formats
                 bs.WriteUInt16(0);
                 bs.Position += 12; // Pad
             }
+
+            bs.WriteInt32(0x100); // Image offset
 
             // Finish up main header
             bs.Position = 4;
@@ -180,7 +196,7 @@ namespace GTTools.Formats
             else if (imgFormat == TXS3ImageFormat.DXT5)
                 arguments += " -f DXT5";
             else if (imgFormat == TXS3ImageFormat.DXT10)
-                arguments += " -f R8G8B8A8_UNORM -dx10";
+                arguments += " -f R8G8B8A8_UNORM";
 
             arguments += " -y"      // Overwrite if it exists
                       + " -m 1"     // Don't care about extra mipmaps
@@ -312,7 +328,8 @@ namespace GTTools.Formats
                         bs.WriteInt32(texture.Height * width);
                         break;
                     default:
-                        bs.WriteInt32((width * 32 + 7) / 8);
+                        //bs.WriteInt32((width * 32 + 7) / 8);
+                        bs.WriteInt32(0);
                         break;
                 }
 
@@ -337,19 +354,56 @@ namespace GTTools.Formats
                         break;
                     case TXS3ImageFormat.DXT10_MORTON:
                     case TXS3ImageFormat.DXT10:
-                        bs.WriteUInt32((uint)(DDSPixelFormatFlags.DDPF_FOURCC));           // Format Flags
-                        bs.WriteString("DX10", StringCoding.Raw);            // FourCC
-                        bs.WriteInt32(0);         // RGBBitCount
-                        bs.WriteInt32(0);  // RBitMask
-                        bs.WriteInt32(0);  // GBitMask
-                        bs.WriteInt32(0);  // BBitMask
-                        bs.WriteInt32(0);  // ABitMask
+                        bs.WriteUInt32((uint)(DDSPixelFormatFlags.DDPF_RGB | DDSPixelFormatFlags.DDPF_ALPHAPIXELS | DDSPixelFormatFlags.DDPF_FOURCC));           // Format Flags
+                        bs.WriteInt32(0);            // FourCC
+                        bs.WriteInt32(32);         // RGBBitCount
+
+                        bs.WriteUInt32(0x00FF0000);  // RBitMask 32U, 16711680U, 65280U, 255U, 4278190080U
+                        bs.WriteUInt32(0x0000FF00);  // GBitMask
+                        bs.WriteUInt32(0x000000FF);  // BBitMask
+                        bs.WriteUInt32(0xFF000000);  // ABitMask
                         break;
                 }
 
                 bs.WriteInt32(0x1000); // dwCaps, 0x1000 = required
                 bs.WriteBytes(new byte[16]); // dwCaps1-4
 
+                // Dirty convert because of endian swap..
+                if (texture.Format == TXS3ImageFormat.DXT10 || texture.Format == TXS3ImageFormat.DXT10_MORTON)
+                {
+                    SpanReader sr = new SpanReader(imageData);
+                    SpanWriter sw = new SpanWriter(imageData);
+                    for (int i = 0; i < width * texture.Height; i++)
+                    {
+                        int val = sr.ReadInt32();
+                        int rev = BinaryPrimitives.ReverseEndianness(val);
+                        sw.WriteInt32(rev);
+                    }
+                }
+                
+                // Unswizzle
+                if (texture.Format == TXS3ImageFormat.DXT10_MORTON)
+                {
+                    int bytesPerPix = 4;
+                    int byteCount = (width * texture.Height) * 4;
+                    byte[] newImageData = new byte[byteCount];
+
+                    SpanReader sr = new SpanReader(imageData);
+                    SpanWriter sw = new SpanWriter(newImageData);
+                    Span<byte> pixBuffer = new byte[4];
+                    for (int i = 0; i < width * texture.Height; i++)
+                    {
+                        int pixIndex = MortonReorder(i, width, texture.Height);
+                        pixBuffer = sr.ReadBytes(4);
+                        int destIndex = bytesPerPix * pixIndex;
+                        sw.Position = destIndex;
+                        sw.WriteBytes(pixBuffer);
+                    }
+
+                    imageData = newImageData;
+                }
+
+                /*
                 if (texture.Format == TXS3ImageFormat.DXT10_MORTON || texture.Format == TXS3ImageFormat.DXT10)
                 {
                     // DDS_HEADER_DXT10
@@ -359,27 +413,8 @@ namespace GTTools.Formats
                     bs.WriteInt32(1); // arraySize
                     bs.WriteInt32(0); // miscFlags2
 
-                    if (texture.Format == TXS3ImageFormat.DXT10_MORTON)
-                    {
-                        int bytesPerPix = 4;
-                        int byteCount = (width * texture.Height) * 4;
-                        byte[] newImageData = new byte[byteCount];
-
-                        SpanReader sr = new SpanReader(imageData);
-                        SpanWriter sw = new SpanWriter(newImageData);
-                        Span<byte> pixBuffer = new byte[4];
-                        for (int i = 0; i < width * texture.Height; i++)
-                        {
-                            int pixIndex = MortonReorder(i, width, texture.Height);
-                            pixBuffer = sr.ReadBytes(4);
-                            int destIndex = bytesPerPix * pixIndex;
-                            sw.Position = destIndex;
-                            sw.WriteBytes(pixBuffer);
-                        }
-
-                        imageData = newImageData;
-                    }
-                }
+                    
+                }*/
 
                 bs.Write(imageData);
             }

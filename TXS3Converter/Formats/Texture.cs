@@ -40,7 +40,7 @@ namespace GTTools.Formats
         public byte WrapS { get; set; } = 3;
         public bool Enable { get; set; } = true;
         public short LODMin { get; set; }
-        public short LODMax { get; set; } = 3860;
+        public short LODMax { get; set; } = 3840;
         public byte MaxAniso { get; set; }
         public byte SignedRGBA { get; set; }
         public byte Mag { get; set; } = 2;
