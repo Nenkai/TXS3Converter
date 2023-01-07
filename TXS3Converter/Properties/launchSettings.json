@@ -1,7 +1,8 @@
 {
   "profiles": {
     "TXS3Converter": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "convert-img -i \"C:\\Gran_Turismo\\GT6_Spec_II_Mod\\Mod_Files\\piece\\gt6\\event_img\\seasonals_n_01_aa.png\" -f PS3 --dxt DXT1 --swizzle"
     }
   }
 }
