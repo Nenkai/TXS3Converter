@@ -37,7 +37,7 @@ namespace GTTools
             {
                 if (!File.Exists(file) && !Directory.Exists(file))
                 {
-                    Console.WriteLine($"File does not exist: {file}");
+                    Console.WriteLine($"ERROR: File does not exist: {file}");
                     continue;
                 }
 
@@ -55,7 +55,7 @@ namespace GTTools
                         }
                         catch (Exception e)
                         {
-                            Console.WriteLine($@"[!] Could not convert {currentFileName} : {e.Message}");
+                            Console.WriteLine($@"ERROR: Could not convert {currentFileName} : {e.Message}");
                         }
                     }
                 }
@@ -69,7 +69,7 @@ namespace GTTools
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine($@"[!] Could not convert {currentFileName} : {e.Message}");
+                        Console.WriteLine($@"ERROR: Could not convert {currentFileName} : {e.Message}");
                     }
                 }
             }
@@ -83,14 +83,28 @@ namespace GTTools
 
             foreach (var file in verbs.InputPath)
             {
-                if (AddFileToTextureSet(textureSet, file, verbs))
+                if (!AddFileToTextureSet(textureSet, file, verbs))
                 {
-                    Console.WriteLine($"Failed to add file '{file}', aborting.");
+                    Console.WriteLine($"ERROR: Failed to add file '{file}', aborting.");
                     return;
                 }
             }
 
-            textureSet.ConvertToTXS("test.img");
+            if (verbs.InputPath.Count() == 1)
+            {
+                textureSet.BuildTextureSetFile(Path.ChangeExtension(verbs.InputPath.First(), ".img"));
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(verbs.OutputPath))
+                {
+                    Console.WriteLine("ERROR: Please specify an output file name when building multiple textures into one texture set.");
+                    return;
+                }
+
+                Console.WriteLine("Building a texture set file with multiple textures is not yet supported.");
+                return;
+            }
         }
 
         static bool _texConvExists = false;
@@ -103,10 +117,10 @@ namespace GTTools
             {
                 case "TXS3":
                 case "3SXT":
-                    ProcessTextureSetFile(path, consoleType);
+                    ProcessTextureSetToPng(path, consoleType);
                     return;
                 case "IDP0":
-                    ProcessPDITexture(path);
+                    ConvertPDITextureToPng(path);
                     return;
                 case "MDL3":
                     ProcessModelSetFile(path);
@@ -118,7 +132,7 @@ namespace GTTools
         {
             if (verbs.Format != TextureConsoleType.PS3)
             {
-                Console.WriteLine("Currently only PS3 TXS3 can be created.");
+                Console.WriteLine("ERROR: Currently only PS3 TXS3 can be created.");
                 return false;
             }
 
@@ -146,7 +160,7 @@ namespace GTTools
                     format = CELL_GCM_TEXTURE_FORMAT.CELL_GCM_TEXTURE_A8R8G8B8;
                 else
                 {
-                    Console.WriteLine("DXT format is invalid or not provided. must be DXT1/DXT3/DXT5/DXT10.");
+                    Console.WriteLine("ERROR: DXT format is invalid or not provided. must be DXT1/DXT3/DXT5/DXT10.");
                     return false;
                 }
 
@@ -172,20 +186,20 @@ namespace GTTools
             }
         }
 
-        static void ProcessTextureSetFile(string path, TextureConsoleType consoleType)
+        static void ProcessTextureSetToPng(string path, TextureConsoleType consoleType)
         {
             var txs = new TextureSet3();
             txs.FromFile(path, consoleType);
-            txs.ConvertToPng(path);
+            txs.ConvertToStandardFormat(Path.ChangeExtension(path, ".png"));
 
             Console.WriteLine($"Converted {currentFileName} to png.");
         }
 
-        static void ProcessPDITexture(string path)
+        static void ConvertPDITextureToPng(string path)
         {
             var pdiTexture = new PDITexture();
             pdiTexture.FromFile(path);
-            pdiTexture.TextureSet.ConvertToPng(path);
+            pdiTexture.TextureSet.ConvertToStandardFormat(Path.ChangeExtension(path, ".png"));
 
             Console.WriteLine($"Converted {currentFileName} to png.");
         }
@@ -196,7 +210,7 @@ namespace GTTools
             using var bs = new BinaryStream(fs);
             MDL3 set = MDL3.FromStream(bs);
 
-            set.TextureSet.ConvertToPng(path);
+            set.TextureSet.ConvertToStandardFormat(path);
         }
 
         static string GetFileMagic(string path)
@@ -224,6 +238,9 @@ namespace GTTools
     {
         [Option('i', "input", Required = true, HelpText = "Input files for texture set")]
         public IEnumerable<string> InputPath { get; set; }
+
+        [Option('o', "output", HelpText = "Output texture set file. Not required if only building a texture set with one texture")]
+        public string OutputPath { get; set; }
 
         [Option('f', "format", Required = true, HelpText = "TXS format. Currently supported is PS3. Valid options: PS3/PS4")]
         public TextureConsoleType Format { get; set; }

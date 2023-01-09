@@ -2,7 +2,7 @@
   "profiles": {
     "TXS3Converter": {
       "commandName": "Project",
-      "commandLineArgs": "convert-img -i \"C:\\Gran_Turismo\\GT6_Spec_II_Mod\\Mod_Files\\piece\\gt6\\event_img\\seasonals_n_01_aa.png\" -f PS3 --dxt DXT1 --swizzle"
+      "commandLineArgs": "convert-png -i \"C:\\Gran_Turismo\\RPCS3\\dev_hdd0\\game\\BCES01893\\USRDIR\\FSRoot\\piece\\gt6\\event_flyer\\sundaycup_og.img\""
     }
   }
 }
