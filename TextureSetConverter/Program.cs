@@ -13,7 +13,7 @@ using CommandLine.Text;
 using CommandLine;
 using static PDTools.Files.Textures.TextureSet3;
 
-namespace GTTools
+namespace TextureSetConverter
 {
     class Program
     {
@@ -23,7 +23,7 @@ namespace GTTools
 
         static void Main(string[] args)
         {
-            Console.WriteLine("Gran Turismo Texture Set (TXS3) / PDI Texture (PDI0) Converter");
+            Console.WriteLine("Gran Turismo Texture Set (TXS3) / PDI Texture (PDI0) Converter - 1.2.0");
 
             var p = Parser.Default.ParseArguments<ConvertToPngVerbs, ConvertToImgVerbs>(args);
             p.WithParsed<ConvertToPngVerbs>(ConvertToPng)
