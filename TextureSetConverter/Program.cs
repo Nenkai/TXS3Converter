@@ -1,44 +1,92 @@
-﻿using System;
-using System.Linq;
-using System.IO;
-using System.Text;
+﻿using Microsoft.Extensions.Logging;
 
-using PDTools.Files.Textures.PS3;
-using PDTools.Files.Textures;
+using NLog.Extensions.Logging;
+
 using PDTools.Files.Models.PS3.ModelSet3;
+using PDTools.Files.Textures;
+using PDTools.Files.Textures.PS3;
 
 using Syroot.BinaryData;
-using System.Collections.Generic;
 
-using CommandLine.Text;
-using CommandLine;
+using System;
+using System.Collections.Generic;
+using System.CommandLine;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Text;
+using System.Threading.Tasks;
+
 using static PDTools.Files.Textures.TextureSet3;
 
 namespace TextureSetConverter;
 
-class Program
+public class Program
 {
-    public static bool isBatchConvert = false;
+    private readonly static ILoggerFactory _loggerFactory;
+    private readonly static ILogger _logger;
+
+    public static Version? GetExecutableVersion() => Assembly.GetEntryAssembly()?.GetName().Version;
+
+    private static bool isBatchConvert = false;
     private static int processedFiles = 0;
-    public static string currentFileName;
+    public static string? currentFileName;
 
-    static void Main(string[] args)
+
+    static Program()
     {
-        Console.WriteLine("Gran Turismo Texture Set (TXS3) / PDI Texture (PDI0) Converter - 1.3.0");
-
-        var p = Parser.Default.ParseArguments<ConvertToPngVerbs, ConvertToImgVerbs>(args);
-        p.WithParsed<ConvertToPngVerbs>(ConvertToPng)
-         .WithParsed<ConvertToImgVerbs>(ConvertToImg)
-         .WithNotParsed(e => { });
+        _loggerFactory = LoggerFactory.Create(builder => builder.AddNLog(svc => new NLog.LogFactory()));
+        _logger = _loggerFactory.CreateLogger<Program>();
     }
 
-    public static void ConvertToPng(ConvertToPngVerbs verbs)
+    public static async Task<int> Main(string[] args)
     {
-        foreach (var file in verbs.InputPath)
+        _logger.LogInformation("Gran Turismo Texture Set (TXS3) / PDI Texture (PDI0) Converter - {:D3}", GetExecutableVersion());
+        _logger.LogInformation("by Nenkai | https://github.com/Nenkai");
+
+        var convertPngCommand = new Command("convert-png", "Converts any img/mdl3/strb to png.")
+        {
+            new Option<string[]>("--input", aliases: ["-i"]) { Required = true, Description = "Input files/textures or folders." },
+            new Option<TextureSetPlatformFormatType>("--format", aliases: ["-f"])
+            {
+                Description = "TXS format. Currently supported is PS3/PS4/PSP. Defaults to PS3. Some textures may not work or output correctly.",
+                DefaultValueFactory = (e) => TextureSetPlatformFormatType.PS3
+            },
+        };
+        convertPngCommand.SetAction(ConvertToPng);
+
+        var convertImgCommand = new Command("convert-img", "Converts any image to .img.")
+        {
+            new Option<string[]>("--input", aliases: ["-i"]) { Required = true, Description = "Input texture files to bake into a texture set file." },
+            new Option<string>("--output", aliases: ["-o"]) { Description = "Output texture set file. Required only if building a texture set with more than one texture" },
+            new Option<TextureSetPlatformFormatType>("--format", aliases: ["-f"]) { Description = "TXS format. Currently supported is PS3. Valid options: PS3",
+                DefaultValueFactory = (e) => TextureSetPlatformFormatType.PS3},
+            new Option<string>("--pixel-format", aliases: ["-pf"]) { Description = "Pixel format when converting for PS3 - Valid options: DXT1/DXT3/DXT5/DXT10. Defaults to DXT5.",
+                DefaultValueFactory = (e) => "DXT5"},
+        };
+        convertImgCommand.SetAction(ConvertToImg);
+
+        var rootCommand = new RootCommand()
+        {
+            convertPngCommand,
+            convertImgCommand,
+        };
+
+        return await rootCommand.Parse(args).InvokeAsync();
+    }
+
+    public static void ConvertToPng(ParseResult parseResult)
+    {
+        string[] inputPaths = parseResult.GetValue<string[]>("--input")!;
+        TextureSetPlatformFormatType platformFormatType = parseResult.GetValue<TextureSetPlatformFormatType>("--format");
+
+        _logger.LogInformation("Platform Type: {} (change this with --format)", platformFormatType);
+
+        foreach (var file in inputPaths)
         {
             if (!File.Exists(file) && !Directory.Exists(file))
             {
-                Console.WriteLine($"ERROR: File does not exist: {file}");
+                _logger.LogError("File does not exist: {}", file);
                 continue;
             }
 
@@ -51,12 +99,12 @@ class Program
                     currentFileName = Path.GetFileName(f);
                     try
                     {
-                        ConvertFileToPng(f, verbs.Format);
+                        ConvertFileToPng(f, platformFormatType);
                         processedFiles++;
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine($@"ERROR: Could not convert {currentFileName} : {e.Message}");
+                        _logger.LogError(e, @"Could not convert {}", currentFileName);
                     }
                 }
             }
@@ -65,51 +113,61 @@ class Program
                 currentFileName = Path.GetFileName(file);
                 try
                 {
-                    ConvertFileToPng(file, verbs.Format);
+                    ConvertFileToPng(file, platformFormatType);
                     processedFiles++;
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine($@"ERROR: Could not convert {currentFileName} : {e.Message}");
+                    _logger.LogError(e, @"Could not convert {}", currentFileName);
                 }
             }
         }
 
-        Console.WriteLine($"Done, {processedFiles} files were converted.");
+        _logger.LogInformation("Done, {} files were converted.", processedFiles);
     }
 
-    public static void ConvertToImg(ConvertToImgVerbs verbs)
+    public static void ConvertToImg(ParseResult parseResult)
     {
-        TextureSet3 textureSet = new TextureSet3();
+        string[] inputPaths = parseResult.GetValue<string[]>("--input")!;
+        string? outputPath = parseResult.GetValue<string>("--output");
+        TextureSetPlatformFormatType platformFormatType = parseResult.GetValue<TextureSetPlatformFormatType>("--format");
+        string pixelFormat = parseResult.GetValue<string>("--pixel-format")!;
 
-        foreach (var file in verbs.InputPath)
+        _logger.LogInformation("Platform Type: {} (--format)", platformFormatType);
+        _logger.LogInformation("Pixel Format: {} (--pixel-format)", pixelFormat);
+
+        TextureSet3 textureSet = new TextureSet3(_loggerFactory);
+
+        foreach (var file in inputPaths)
         {
-            if (!AddFileToTextureSet(textureSet, file, verbs))
+            if (!AddFileToTextureSet(textureSet, file, platformFormatType, pixelFormat))
             {
-                Console.WriteLine($"ERROR: Failed to add file '{file}', aborting.");
+                _logger.LogError("Failed to add file '{}', aborting.", file);
                 return;
             }
         }
 
-        if (verbs.InputPath.Count() == 1)
+        _logger.LogInformation("Building texture set with {} texture(s).", textureSet.TextureInfos.Count);
+
+        if (inputPaths.Length == 1)
         {
-            textureSet.BuildTextureSetFile(Path.ChangeExtension(verbs.InputPath.First(), ".img"));
+            textureSet.BuildTextureSetFile(Path.ChangeExtension(inputPaths.First(), ".img"));
         }
         else
         {
-            if (string.IsNullOrEmpty(verbs.OutputPath))
+            if (string.IsNullOrWhiteSpace(outputPath))
             {
-                Console.WriteLine("ERROR: Please specify an output file name when building multiple textures into one texture set.");
+                _logger.LogError("Please specify an output file name when building multiple textures into one texture set.");
                 return;
             }
 
-            Console.WriteLine("Building a texture set file with multiple textures is not yet supported.");
+            _logger.LogWarning("Building a texture set file with multiple textures is not yet supported.");
             return;
         }
     }
 
     static bool _texConvExists = false;
-    static void ConvertFileToPng(string path, TextureConsoleType consoleType)
+    static void ConvertFileToPng(string path, TextureSetPlatformFormatType consoleType)
     {
         currentFileName = Path.GetFileName(path);
 
@@ -148,16 +206,17 @@ class Program
             fs.Position = textureOffset;
 
             var texture = new TextureSet3();
-            texture.FromStream(fs, TextureConsoleType.PS3);
+            texture.FromStream(fs, TextureSetPlatformFormatType.PS3);
             texture.ConvertToStandardFormat(path + $"_{i}.png");
         }
     }
 
-    public static bool AddFileToTextureSet(TextureSet3 textureSet, string path, ConvertToImgVerbs verbs)
+    public static bool AddFileToTextureSet(TextureSet3 textureSet, string path, TextureSetPlatformFormatType platformFormatType,
+        string cellFormat)
     {
-        if (verbs.Format != TextureConsoleType.PS3)
+        if (platformFormatType != TextureSetPlatformFormatType.PS3)
         {
-            Console.WriteLine("ERROR: Currently only PS3 TXS3 can be created.");
+            _logger.LogError("Currently only PS3 TXS3 can be created.");
             return false;
         }
 
@@ -169,23 +228,23 @@ class Program
         {
             if (!_texConvExists && !File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "texconv.exe")))
             {
-                Console.WriteLine("TexConv (image to DDS tool) is missing. Download it from https://github.com/microsoft/DirectXTex/releases and place it next to the tool.");
-                Environment.Exit(0);
+                _logger.LogError("TexConv (image to DDS tool) is missing. Download texconv.exe from https://github.com/microsoft/DirectXTex/releases and place it next to the executable.");
+                return false;
             }
             _texConvExists = true;
 
             CELL_GCM_TEXTURE_FORMAT format = 0;
-            if (verbs.CellFormat.Equals("DXT1"))
+            if (cellFormat.Equals("DXT1"))
                 format = CELL_GCM_TEXTURE_FORMAT.CELL_GCM_TEXTURE_COMPRESSED_DXT1;
-            else if (verbs.CellFormat.Equals("DXT3"))
+            else if (cellFormat.Equals("DXT3"))
                 format = CELL_GCM_TEXTURE_FORMAT.CELL_GCM_TEXTURE_COMPRESSED_DXT23;
-            else if (verbs.CellFormat.Equals("DXT5"))
+            else if (cellFormat.Equals("DXT5"))
                 format = CELL_GCM_TEXTURE_FORMAT.CELL_GCM_TEXTURE_COMPRESSED_DXT45;
-            else if (verbs.CellFormat.Equals("DXT10"))
+            else if (cellFormat.Equals("DXT10"))
                 format = CELL_GCM_TEXTURE_FORMAT.CELL_GCM_TEXTURE_A8R8G8B8;
             else
             {
-                Console.WriteLine("ERROR: DXT format is invalid or not provided. must be DXT1/DXT3/DXT5/DXT10.");
+                _logger.LogError("ERROR: DXT format is invalid or not provided. must be DXT1/DXT3/DXT5/DXT10.");
                 return false;
             }
 
@@ -207,19 +266,18 @@ class Program
         }
         else
         {
-            Console.WriteLine($"Skipped {path}, no operation to be done");
+            _logger.LogWarning("Skipped {}, no operation to be done", path);
             return true;
         }
     }
 
-    static void ProcessTextureSetToPng(string path, TextureConsoleType consoleType)
+    static void ProcessTextureSetToPng(string path, TextureSetPlatformFormatType consoleType)
     {
-        Console.WriteLine($"Converting {currentFileName} to png.");
+        _logger.LogInformation("Converting {} to png.", currentFileName);
 
         var txs = new TextureSet3();
         txs.FromFile(path, consoleType);
         txs.ConvertToStandardFormat(Path.ChangeExtension(path, ".png"));
-
     }
 
     static void ConvertPDITextureToPng(string path)
@@ -228,7 +286,7 @@ class Program
         pdiTexture.FromFile(path);
         pdiTexture.TextureSet.ConvertToStandardFormat(Path.ChangeExtension(path, ".png"));
 
-        Console.WriteLine($"Converted {currentFileName} to png.");
+        _logger.LogInformation("Converted {} to png.", currentFileName);
     }
 
     static void ProcessModelSetFile(string path)
@@ -248,30 +306,4 @@ class Program
         fs.ReadExactly(mBuf);
         return Encoding.ASCII.GetString(mBuf);
     }
-}
-
-[Verb("convert-png", HelpText = "Converts any img/mdl3/strb to png.")]
-public class ConvertToPngVerbs
-{
-    [Option('i', "input", Required = true, HelpText = "Input file texture or folder.")]
-    public IEnumerable<string> InputPath { get; set; }
-
-    [Option('f', "format", HelpText = "TXS format. Currently supported is PS3/PS4/PSP. Defaults to PS3. Some textures may not work or output correctly.")]
-    public TextureConsoleType Format { get; set; } = TextureConsoleType.PS3;
-}
-
-[Verb("convert-img", HelpText = "Converts any image to .img.")]
-public class ConvertToImgVerbs
-{
-    [Option('i', "input", Required = true, HelpText = "Input files for texture set")]
-    public IEnumerable<string> InputPath { get; set; }
-
-    [Option('o', "output", HelpText = "Output texture set file. Not required if only building a texture set with one texture")]
-    public string OutputPath { get; set; }
-
-    [Option('f', "format", Required = true, HelpText = "TXS format. Currently supported is PS3. Valid options: PS3")]
-    public TextureConsoleType Format { get; set; }
-
-    [Option("pf", HelpText = "Pixel format when converting for PS3 - Valid options: DXT1/DXT3/DXT5/DXT10. Defaults to DXT5.")]
-    public string CellFormat { get; set; } = "DXT5";
 }

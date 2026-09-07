@@ -2,7 +2,7 @@
   "profiles": {
     "TXS3Converter": {
       "commandName": "Project",
-      "commandLineArgs": "convert-png -i \"C:\\Gran_Turismo\\RPCS3\\dev_hdd0\\game\\BCES01893\\USRDIR\\FSRoot\\piece\\gt6\\event_flyer\\sundaycup_og.img\""
+      "commandLineArgs": "convert-png -i \"D:\\Modding_Research\\Gran_Turismo\\Gran_Turismo_HD\\1.2_US\\NPUA80019\\USRDIR\\extracted\\projects-ps3\\trial\\US\\TopRoot\\image\\gthd\\GTHD_Logo_H.dds\""
     }
   }
 }
